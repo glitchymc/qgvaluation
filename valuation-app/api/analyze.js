@@ -113,7 +113,7 @@ All monetary values in millions of USD. Be realistic and conservative. Use actua
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5",
         max_tokens: 4000,
         system: SYSTEM_PROMPT,
         messages: [{
