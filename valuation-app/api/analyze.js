@@ -123,17 +123,17 @@ All monetary values in millions of USD. Be realistic and conservative. Use actua
       })
     });
 
+    const rawText = await response.text();
+    
     if (!response.ok) {
-      const err = await response.text();
-      return res.status(500).json({ error: "Anthropic API error", detail: err });
+      return res.status(500).json({ error: "Anthropic API error", status: response.status, detail: rawText });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(rawText);
     const text = data.content?.map(b => b.text || "").join("") || "";
     const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
     return res.status(200).json(parsed);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message, stack: err.stack });
   }
-}
