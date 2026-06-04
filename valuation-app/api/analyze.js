@@ -8,89 +8,69 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "No financial data provided" });
   }
 
-  const SEARCH_PROMPT = `You are a financial research assistant supporting an M&A valuation. 
+  const SEARCH_PROMPT = `You are a financial research assistant supporting an M&A valuation.
 
-Analyze the financial data below, identify the company's industry, and select 5-6 appropriate public comparable companies.
+Analyze the financial data below, identify the company's industry, and select 5 appropriate public comparable companies.
 
-Then use web search to find CURRENT LIVE data for each comparable:
+Use web search to find CURRENT data for each comparable:
 - Current market cap and enterprise value
-- Last 12 months (LTM) revenue and EBITDA
+- Last 12 months revenue and EBITDA
 - EV/Revenue and EV/EBITDA multiples
-- P/E ratio
-- YoY revenue growth rate
+- P/E ratio and YoY revenue growth
 
-Also search for:
-- Recent M&A transactions in this industry (past 2-3 years) with deal values and multiples paid
-- Any recent analyst reports or industry valuation benchmarks
+Also search for 3-4 recent M&A transactions in this industry (past 2-3 years) with deal values and multiples paid.
 
-Cite every source with URL and date. Flag any data you could not find live.
+Be concise. For each comp, give: name, ticker, EV/Rev, EV/EBITDA, P/E, revenue growth, market cap, source URL, and date. 
+For each deal: target, acquirer, year, deal value, EV/EBITDA paid, source.
 
 Financial data:
 ${content}
 
 Transaction type: ${txType}`;
 
-  const VALUATION_SYSTEM = `You are a senior investment banker. Using live market research, produce a rigorous valuation. 
-Use ONLY multiples actually found in the research. Cite source and date for every number. Flag estimates clearly.
-Respond ONLY with valid JSON — no markdown, no preamble.
+  const VALUATION_SYSTEM = `You are a senior investment banker. Using the live market research provided, produce a valuation.
+Use ONLY multiples actually found in the research. Cite source and date for every number.
+Respond ONLY with valid JSON — no markdown fences, no explanation, just the raw JSON object.`;
 
-JSON structure:
+  const VALUATION_USER_TEMPLATE = (researchText) => `Transaction Type: ${txType}
+
+Original Financial Data:
+${content}
+
+---
+LIVE MARKET RESEARCH:
+${researchText}
+
+Return this exact JSON structure with real numbers:
 {
-  "company_summary": { "name": "string", "industry": "string", "description": "string", "transaction_type": "string" },
-  "extracted_financials": { "revenue": number, "revenue_growth": number, "ebitda": number, "ebitda_margin": number, "net_income": number, "total_debt": number, "cash": number, "fiscal_year": "string" },
+  "company_summary": { "name": "", "industry": "", "description": "", "transaction_type": "" },
+  "extracted_financials": { "revenue": 0, "revenue_growth": 0, "ebitda": 0, "ebitda_margin": 0, "net_income": 0, "total_debt": 0, "cash": 0, "fiscal_year": "" },
   "market_comps": [
-    {
-      "company": "string",
-      "ticker": "string",
-      "ev_revenue": number,
-      "ev_ebitda": number,
-      "pe_ratio": number,
-      "revenue_growth": number,
-      "market_cap": number,
-      "why_comparable": "string",
-      "data_source": "string",
-      "data_url": "string",
-      "data_date": "string",
-      "data_verified": true
-    }
+    { "company": "", "ticker": "", "ev_revenue": 0, "ev_ebitda": 0, "pe_ratio": 0, "revenue_growth": 0, "market_cap": 0, "why_comparable": "", "data_source": "", "data_url": "", "data_date": "", "data_verified": true }
   ],
   "valuations": {
-    "comps": { "ev_revenue_low": number, "ev_revenue_mid": number, "ev_revenue_high": number, "ev_ebitda_low": number, "ev_ebitda_mid": number, "ev_ebitda_high": number, "equity_value_low": number, "equity_value_mid": number, "equity_value_high": number },
-    "dcf": { "equity_value_low": number, "equity_value_mid": number, "equity_value_high": number, "wacc_used": number, "terminal_growth_rate": number, "projection_years": number },
-    "precedent_transactions": { "equity_value_low": number, "equity_value_mid": number, "equity_value_high": number, "control_premium": number, "avg_ev_ebitda_paid": number }
+    "comps": { "ev_revenue_low": 0, "ev_revenue_mid": 0, "ev_revenue_high": 0, "ev_ebitda_low": 0, "ev_ebitda_mid": 0, "ev_ebitda_high": 0, "equity_value_low": 0, "equity_value_mid": 0, "equity_value_high": 0 },
+    "dcf": { "equity_value_low": 0, "equity_value_mid": 0, "equity_value_high": 0, "wacc_used": 0, "terminal_growth_rate": 0, "projection_years": 0 },
+    "precedent_transactions": { "equity_value_low": 0, "equity_value_mid": 0, "equity_value_high": 0, "control_premium": 0, "avg_ev_ebitda_paid": 0 }
   },
   "precedent_deals": [
-    {
-      "target": "string",
-      "acquirer": "string",
-      "year": number,
-      "deal_value": number,
-      "ev_ebitda_paid": number,
-      "ev_revenue_paid": number,
-      "source": "string"
-    }
+    { "target": "", "acquirer": "", "year": 0, "deal_value": 0, "ev_ebitda_paid": 0, "ev_revenue_paid": 0, "source": "" }
   ],
-  "football_field": { "overall_low": number, "overall_mid": number, "overall_high": number },
-  "key_value_drivers": ["string"],
-  "risk_factors": ["string"],
-  "recommendation": "string",
-  "implied_multiples": { "ev_revenue": number, "ev_ebitda": number },
+  "football_field": { "overall_low": 0, "overall_mid": 0, "overall_high": 0 },
+  "key_value_drivers": [],
+  "risk_factors": [],
+  "recommendation": "",
+  "implied_multiples": { "ev_revenue": 0, "ev_ebitda": 0 },
   "accuracy_assessment": {
-    "overall_confidence": "High or Medium or Low",
-    "confidence_score": number,
-    "live_data_coverage": number,
-    "data_quality": {
-      "score": number,
-      "inputs_provided": ["string"],
-      "inputs_missing": ["string"],
-      "assumptions_made": ["string"]
-    },
-    "methodology_notes": { "comps": "string", "dcf": "string", "precedent_transactions": "string" },
-    "valuation_caveats": ["string"],
-    "what_would_improve_accuracy": ["string"]
+    "overall_confidence": "Medium",
+    "confidence_score": 0,
+    "live_data_coverage": 0,
+    "data_quality": { "score": 0, "inputs_provided": [], "inputs_missing": [], "assumptions_made": [] },
+    "methodology_notes": { "comps": "", "dcf": "", "precedent_transactions": "" },
+    "valuation_caveats": [],
+    "what_would_improve_accuracy": []
   }
-}
-All monetary values in millions USD.`;
+}`;
 
   try {
     // Phase 1: Live web research
@@ -103,26 +83,26 @@ All monetary values in millions USD.`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 5000,
+        max_tokens: 3000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: SEARCH_PROMPT }]
       })
     });
 
-    const researchRaw = await researchResp.text();
     if (!researchResp.ok) {
-      return res.status(500).json({ error: "Research phase failed", detail: researchRaw });
+      const detail = await researchResp.text();
+      return res.status(500).json({ error: "Research phase failed", detail });
     }
 
-    const researchData = JSON.parse(researchRaw);
+    const researchData = await researchResp.json();
     const researchText = (researchData.content || [])
       .map(b => {
         if (b.type === "text") return b.text;
-        if (b.type === "tool_result") return JSON.stringify(b.content);
         return "";
       })
       .filter(Boolean)
-      .join("\n\n");
+      .join("\n\n")
+      .slice(0, 6000); // cap to avoid overflow
 
     // Phase 2: Valuation using live data
     const valuationResp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -134,27 +114,47 @@ All monetary values in millions USD.`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 5000,
+        max_tokens: 6000,
         system: VALUATION_SYSTEM,
         messages: [{
           role: "user",
-          content: `Transaction Type: ${txType}\n\nOriginal Financial Data:\n${content}\n\n---\n\nLIVE MARKET RESEARCH (retrieved via web search right now):\n${researchText}\n\nGenerate the complete valuation JSON using this live data.`
+          content: VALUATION_USER_TEMPLATE(researchText)
         }]
       })
     });
 
-    const valuationRaw = await valuationResp.text();
     if (!valuationResp.ok) {
-      return res.status(500).json({ error: "Valuation phase failed", detail: valuationRaw });
+      const detail = await valuationResp.text();
+      return res.status(500).json({ error: "Valuation phase failed", detail });
     }
 
-    const valuationData = JSON.parse(valuationRaw);
-    const text = (valuationData.content || []).map(b => b.text || "").join("");
-    const clean = text.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
-    parsed._research_summary = researchText.slice(0, 4000);
+    const valuationData = await valuationResp.json();
+    const rawText = (valuationData.content || []).map(b => b.text || "").join("");
 
+    // Robust JSON extraction — handle any wrapping
+    let jsonStr = rawText.trim();
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) jsonStr = fenceMatch[1].trim();
+    const braceStart = jsonStr.indexOf("{");
+    const braceEnd = jsonStr.lastIndexOf("}");
+    if (braceStart !== -1 && braceEnd !== -1) {
+      jsonStr = jsonStr.slice(braceStart, braceEnd + 1);
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      return res.status(500).json({
+        error: "JSON parse failed",
+        detail: parseErr.message,
+        raw: rawText.slice(0, 500)
+      });
+    }
+
+    parsed._research_summary = researchText.slice(0, 4000);
     return res.status(200).json(parsed);
+
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
