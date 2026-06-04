@@ -104,7 +104,10 @@ Return this exact JSON structure with real numbers:
       .join("\n\n")
       .slice(0, 6000); // cap to avoid overflow
 
-    // Phase 2: Valuation using live data
+    // Wait to avoid rate limit between phases
+await new Promise(resolve => setTimeout(resolve, 62000));
+
+// Phase 2: Valuation using live data
     const valuationResp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
