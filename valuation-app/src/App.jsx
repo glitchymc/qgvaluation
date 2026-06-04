@@ -4,7 +4,7 @@ import "./App.css";
 const fmt = (n, decimals = 1) => {
   if (n === null || n === undefined || isNaN(n)) return "—";
   if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(1)}B`;
-  return `$${n.toFixed(decimals)}M`;
+  return `$${Number(n).toFixed(decimals)}M`;
 };
 const fmtPct = (n) => (n == null ? "—" : `${Number(n).toFixed(1)}%`);
 const fmtX = (n) => (n == null ? "—" : `${Number(n).toFixed(1)}x`);
@@ -42,16 +42,17 @@ export default function App() {
 
     const steps = [
       "Parsing financial statements...",
-      "Identifying industry & peers...",
-      "Pulling market comparables...",
+      "Identifying comparable companies...",
+      "Searching live market data...",
+      "Pulling Yahoo Finance & SEC filings...",
       "Running DCF model...",
       "Analyzing precedent transactions...",
-      "Building football field...",
+      "Verifying sources & building report...",
     ];
     let i = 0;
     const interval = setInterval(() => {
       if (i < steps.length) setProgress(steps[i++]);
-    }, 1800);
+    }, 2200);
 
     try {
       const resp = await fetch("/api/analyze", {
@@ -96,7 +97,7 @@ export default function App() {
           <span className="brand-label">Valuation Intelligence</span>
         </div>
         <h1 className="page-title">M&A & Equity Valuation</h1>
-        <p className="page-sub">Upload financial statements or paste key metrics. Get institutional-grade valuation with market comps, DCF, and precedent transactions.</p>
+        <p className="page-sub">Upload financial statements or paste key metrics. Live market data sourced from Yahoo Finance, SEC filings, and financial databases.</p>
 
         <div className="field-group">
           <label className="field-label">Transaction Type</label>
@@ -141,7 +142,7 @@ export default function App() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           Run Valuation Analysis
         </button>
-        <p className="disclaimer">AI-powered · Uses market data through training cutoff · Not financial advice</p>
+        <p className="disclaimer">Live data sourced at time of analysis · Not financial advice · Verify before use</p>
       </div>
     </div>
   );
@@ -153,12 +154,25 @@ function AnalyzingScreen({ progress }) {
       <div className="spinner" />
       <h2 className="analyzing-title">Running Analysis</h2>
       <p className="analyzing-sub">{progress || "Initializing..."}</p>
+      <p className="analyzing-note">Searching live market data — this takes 20–40 seconds</p>
     </div>
   );
 }
 
+function LiveBadge({ verified }) {
+  return verified
+    ? <span className="live-badge live-green">● Live</span>
+    : <span className="live-badge live-amber">~ Estimated</span>;
+}
+
 function ResultsScreen({ result, onReset }) {
-  const { company_summary, extracted_financials: ef, market_comps, valuations: v, football_field, key_value_drivers, risk_factors, recommendation, implied_multiples } = result;
+  const {
+    company_summary, extracted_financials: ef, market_comps,
+    valuations: v, precedent_deals, football_field,
+    key_value_drivers, risk_factors, recommendation,
+    implied_multiples, accuracy_assessment, _research_summary
+  } = result;
+  const [showResearch, setShowResearch] = useState(false);
 
   const ranges = [
     { label: "Comps — EV/Revenue", low: v.comps.equity_value_low, mid: v.comps.equity_value_mid, high: v.comps.equity_value_high, color: "#2563eb" },
@@ -173,6 +187,9 @@ function ResultsScreen({ result, onReset }) {
   const chartRange = chartMax - chartMin;
   const pct = (val) => ((val - chartMin) / chartRange) * 100;
 
+  const liveCount = (market_comps || []).filter(c => c.data_verified).length;
+  const totalCount = (market_comps || []).length;
+
   return (
     <div className="page">
       <div className="results-container">
@@ -181,11 +198,25 @@ function ResultsScreen({ result, onReset }) {
             <div className="badges">
               <span className="badge gray">{company_summary.transaction_type}</span>
               <span className="badge blue">{company_summary.industry}</span>
+              <span className="badge green-pill">{liveCount}/{totalCount} comps live</span>
             </div>
             <h1 className="company-name">{company_summary.name}</h1>
             <p className="company-desc">{company_summary.description}</p>
           </div>
           <button className="back-btn" onClick={onReset}>← New Analysis</button>
+        </div>
+
+        {/* Data freshness banner */}
+        <div className="freshness-banner">
+          <div className="freshness-left">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>Market data retrieved live · {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+          </div>
+          <div className="freshness-sources">
+            <span className="source-chip">Yahoo Finance</span>
+            <span className="source-chip">SEC EDGAR</span>
+            <span className="source-chip">Financial News</span>
+          </div>
         </div>
 
         <Section title="Key Financials" subtitle={ef.fiscal_year}>
@@ -230,27 +261,66 @@ function ResultsScreen({ result, onReset }) {
           </div>
         </Section>
 
-        <Section title="Market Comparables" subtitle="Public company benchmarks">
+        {/* Market comps with live sourcing */}
+        <Section title="Market Comparables" subtitle="Live data · sourced at time of analysis">
           <div className="table-wrap">
             <table className="comps-table">
               <thead>
-                <tr>{["Company", "EV/Rev", "EV/EBITDA", "P/E", "Rev Growth", "Why Comparable"].map(h => <th key={h}>{h}</th>)}</tr>
+                <tr>{["Company", "EV/Rev", "EV/EBITDA", "P/E", "Rev Growth", "Mkt Cap", "Source", "Date", ""].map(h => <th key={h}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {(market_comps || []).map((c, i) => (
                   <tr key={i}>
-                    <td className="td-company">{c.company}</td>
+                    <td className="td-company">
+                      <div>{c.company}</div>
+                      {c.ticker && <div className="td-ticker">{c.ticker}</div>}
+                    </td>
                     <td className="td-mono">{fmtX(c.ev_revenue)}</td>
                     <td className="td-mono">{fmtX(c.ev_ebitda)}</td>
                     <td className="td-mono">{fmtX(c.pe_ratio)}</td>
                     <td className={`td-mono ${c.revenue_growth > 20 ? "td-green" : ""}`}>{fmtPct(c.revenue_growth)}</td>
-                    <td className="td-why">{c.why_comparable}</td>
+                    <td className="td-mono">{fmt(c.market_cap)}</td>
+                    <td className="td-source-cell">
+                      {c.data_url
+                        ? <a href={c.data_url} target="_blank" rel="noreferrer" className="source-link">{c.data_source || "Source"}</a>
+                        : <span className="source-text">{c.data_source || "—"}</span>
+                      }
+                    </td>
+                    <td className="td-mono td-date">{c.data_date || "—"}</td>
+                    <td><LiveBadge verified={c.data_verified} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="table-note">Why comparable: hover or see notes — {(market_comps || []).map(c => `${c.company}: ${c.why_comparable}`).join(" · ")}</p>
         </Section>
+
+        {/* Precedent transactions */}
+        {precedent_deals?.length > 0 && (
+          <Section title="Precedent Transactions" subtitle="Recent M&A deals in this sector">
+            <div className="table-wrap">
+              <table className="comps-table">
+                <thead>
+                  <tr>{["Target", "Acquirer", "Year", "Deal Value", "EV/EBITDA", "EV/Revenue", "Source"].map(h => <th key={h}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {precedent_deals.map((d, i) => (
+                    <tr key={i}>
+                      <td className="td-company">{d.target}</td>
+                      <td className="td-source-cell">{d.acquirer}</td>
+                      <td className="td-mono">{d.year}</td>
+                      <td className="td-mono">{fmt(d.deal_value)}</td>
+                      <td className="td-mono">{fmtX(d.ev_ebitda_paid)}</td>
+                      <td className="td-mono">{fmtX(d.ev_revenue_paid)}</td>
+                      <td className="td-source-cell">{d.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
 
         <div className="method-cards">
           {[
@@ -286,7 +356,125 @@ function ResultsScreen({ result, onReset }) {
           <p className="rec-text">{recommendation}</p>
         </div>
 
-        <p className="legal">AI-GENERATED VALUATION · FOR REFERENCE ONLY · NOT FINANCIAL ADVICE · VERIFY WITH LICENSED ADVISORS</p>
+        {accuracy_assessment && <AccuracySection accuracy={accuracy_assessment} />}
+
+        {/* Raw research toggle */}
+        {_research_summary && (
+          <div className="research-toggle">
+            <button className="toggle-btn" onClick={() => setShowResearch(!showResearch)}>
+              {showResearch ? "▲ Hide" : "▼ Show"} raw market research
+            </button>
+            {showResearch && (
+              <div className="research-box">
+                <pre>{_research_summary}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="legal">LIVE DATA SOURCED AT TIME OF ANALYSIS · AI-ASSISTED VALUATION · NOT FINANCIAL ADVICE · VERIFY WITH LICENSED ADVISORS</p>
+      </div>
+    </div>
+  );
+}
+
+function AccuracySection({ accuracy }) {
+  const { overall_confidence, confidence_score, live_data_coverage, data_quality, methodology_notes, valuation_caveats, what_would_improve_accuracy } = accuracy;
+
+  const scoreColor = confidence_score >= 70 ? "#059669" : confidence_score >= 45 ? "#d97706" : "#dc2626";
+  const scoreBg = confidence_score >= 70 ? "#ecfdf5" : confidence_score >= 45 ? "#fffbeb" : "#fef2f2";
+  const scoreBorder = confidence_score >= 70 ? "#a7f3d0" : confidence_score >= 45 ? "#fde68a" : "#fecaca";
+
+  return (
+    <div className="accuracy-section">
+      <div className="section-header">
+        <h2 className="section-title">Accuracy & Sources</h2>
+        <span className="section-sub">Methodology transparency</span>
+      </div>
+
+      <div className="confidence-banner" style={{ background: scoreBg, border: `1px solid ${scoreBorder}` }}>
+        <div className="confidence-left">
+          <div className="confidence-score" style={{ color: scoreColor }}>{confidence_score}</div>
+          <div className="confidence-label" style={{ color: scoreColor }}>Confidence</div>
+        </div>
+        <div className="confidence-bar-wrap">
+          <div className="confidence-bar-track">
+            <div className="confidence-bar-fill" style={{ width: `${confidence_score}%`, background: scoreColor }} />
+          </div>
+          <div className="confidence-meta">
+            <span>Data Quality: {data_quality?.score}/100</span>
+            <span>Live Data Coverage: {live_data_coverage != null ? `${live_data_coverage}%` : overall_confidence}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="accuracy-grid">
+        <div className="accuracy-card">
+          <div className="ac-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Inputs provided
+          </div>
+          {(data_quality?.inputs_provided || []).map((item, i) => (
+            <div key={i} className="ac-item ac-item-green">{item}</div>
+          ))}
+        </div>
+        <div className="accuracy-card">
+          <div className="ac-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Missing inputs
+          </div>
+          {(data_quality?.inputs_missing || []).map((item, i) => (
+            <div key={i} className="ac-item ac-item-amber">{item}</div>
+          ))}
+        </div>
+      </div>
+
+      {data_quality?.assumptions_made?.length > 0 && (
+        <div className="assumptions-box">
+          <div className="ac-title" style={{ marginBottom: 10 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg>
+            Assumptions made
+          </div>
+          {(data_quality.assumptions_made || []).map((a, i) => (
+            <div key={i} className="assumption-item">
+              <span className="assumption-num">{i + 1}</span>
+              <span>{a}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {methodology_notes && (
+        <div className="method-notes">
+          <div className="ac-title" style={{ marginBottom: 12 }}>Methodology notes</div>
+          {[["Comparable companies", methodology_notes.comps], ["DCF model", methodology_notes.dcf], ["Precedent transactions", methodology_notes.precedent_transactions]].map(([label, note]) => note && (
+            <div key={label} className="method-note-row">
+              <span className="method-note-label">{label}</span>
+              <span className="method-note-text">{note}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="accuracy-grid">
+        <div className="accuracy-card">
+          <div className="ac-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Valuation caveats
+          </div>
+          {(valuation_caveats || []).map((c, i) => (
+            <div key={i} className="ac-item ac-item-red">{c}</div>
+          ))}
+        </div>
+        <div className="accuracy-card">
+          <div className="ac-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            What would improve accuracy
+          </div>
+          {(what_would_improve_accuracy || []).map((w, i) => (
+            <div key={i} className="ac-item ac-item-blue">{w}</div>
+          ))}
+        </div>
       </div>
     </div>
   );
