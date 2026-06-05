@@ -62,7 +62,7 @@ Live market research: ${researchText || "Not available — use training data for
     try {
       parsed = JSON.parse(jsonStr);
     } catch (parseErr) {
-      return res.status(500).json({ error: "JSON parse failed", detail: parseErr.message, raw: rawText.slice(0, 500) });
+      return res.status(200).json({ error: "JSON parse failed", detail: parseErr.message, raw: rawText.slice(0, 1000) });
     }
 
     parsed._research_summary = researchText || "";
