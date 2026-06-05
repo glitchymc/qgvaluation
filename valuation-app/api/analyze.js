@@ -8,10 +8,10 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "No financial data provided" });
   }
 
-  const trimmedContent = content.slice(0, 1200);
+  const trimmedContent = content.slice(0, 2000);
 
   try {
-    // Phase 1: Research
+    // Phase 1: Live web research
     const researchResp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -21,13 +21,20 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 1500,
+        max_tokens: 3000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{
           role: "user",
-          content: `Research task for ${txType} valuation. Company: ${trimmedContent.slice(0, 300)}
+          content: `You are a financial research assistant for an M&A valuation.
 
-Find 4 public comparable companies with current EV/Revenue, EV/EBITDA, P/E ratios and 2 recent M&A deals in this sector. Be concise.`
+Company data: ${trimmedContent}
+Transaction type: ${txType}
+
+Use web search to find:
+1. 5 public comparable companies with their current EV/Revenue, EV/EBITDA, P/E multiples, market cap, and revenue growth. Cite the source URL and date for each.
+2. 3 recent M&A transactions in this industry (last 2-3 years) with deal value and multiples paid. Cite sources.
+
+Be specific with numbers. State clearly where each data point came from.`
         }]
       })
     });
@@ -42,10 +49,10 @@ Find 4 public comparable companies with current EV/Revenue, EV/EBITDA, P/E ratio
       .filter(b => b.type === "text")
       .map(b => b.text)
       .join("\n")
-      .slice(0, 1200);
+      .slice(0, 3000);
 
-    // Delay between calls
-    await new Promise(r => setTimeout(r, 5000));
+    // Delay between phases
+    await new Promise(r => setTimeout(r, 3000));
 
     // Phase 2: Valuation
     const valuationResp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -57,8 +64,8 @@ Find 4 public comparable companies with current EV/Revenue, EV/EBITDA, P/E ratio
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 3500,
-        system: `You are an M&A investment banker. Produce a full valuation analysis and return ONLY a raw JSON object with these exact keys:
+        max_tokens: 4000,
+        system: `You are a senior M&A investment banker. Using the financial data and live market research provided, produce a rigorous valuation. Use ONLY multiples from the live research where available — cite source and date for each. Return ONLY a raw JSON object with these exact keys:
 company_summary (name, industry, description, transaction_type),
 extracted_financials (revenue, revenue_growth, ebitda, ebitda_margin, net_income, total_debt, cash, fiscal_year),
 market_comps (array: company, ticker, ev_revenue, ev_ebitda, pe_ratio, revenue_growth, market_cap, why_comparable, data_source, data_url, data_date, data_verified),
@@ -69,7 +76,7 @@ key_value_drivers (array of strings),
 risk_factors (array of strings),
 recommendation (string),
 implied_multiples (ev_revenue, ev_ebitda),
-accuracy_assessment (overall_confidence, confidence_score, live_data_coverage, data_quality with score/inputs_provided/inputs_missing/assumptions_made, methodology_notes with comps/dcf/precedent_transactions, valuation_caveats, what_would_improve_accuracy).
+accuracy_assessment (overall_confidence, confidence_score 0-100, live_data_coverage 0-100, data_quality with score/inputs_provided/inputs_missing/assumptions_made, methodology_notes with comps/dcf/precedent_transactions, valuation_caveats, what_would_improve_accuracy).
 All money in millions USD. No markdown. Raw JSON only.`,
         messages: [{
           role: "user",
