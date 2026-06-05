@@ -55,17 +55,35 @@ export default function App() {
     }, 2200);
 
     try {
-      const resp = await fetch("/api/analyze", {
+      // Phase 1: Research
+      const researchResp = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txType, content }),
       });
-      clearInterval(interval);
-      if (!resp.ok) {
-        const e = await resp.json();
-        throw new Error(e.error || "Server error");
+      if (!researchResp.ok) {
+        const e = await researchResp.json();
+        throw new Error(e.error || "Research failed");
       }
-      const parsed = await resp.json();
+      const { researchText } = await researchResp.json();
+
+      // Wait for rate limit window to reset
+      setProgress("Preparing valuation model...");
+      await new Promise(r => setTimeout(r, 62000));
+
+      // Phase 2: Valuation
+      setProgress("Building valuation & football field...");
+      const valuationResp = await fetch("/api/valuation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txType, content, researchText }),
+      });
+      clearInterval(interval);
+      if (!valuationResp.ok) {
+        const e = await valuationResp.json();
+        throw new Error(e.error || "Valuation failed");
+      }
+      const parsed = await valuationResp.json();
       setResult(parsed);
       setStep("results");
     } catch (err) {
