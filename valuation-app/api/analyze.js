@@ -49,10 +49,10 @@ Be specific with numbers. State clearly where each data point came from.`
       .filter(b => b.type === "text")
       .map(b => b.text)
       .join("\n")
-      .slice(0, 3000);
+      .slice(0, 1500);
 
-    // Delay between phases
-    await new Promise(r => setTimeout(r, 3000));
+    // Wait for rate limit window to reset
+    await new Promise(r => setTimeout(r, 62000));
 
     // Phase 2: Valuation
     const valuationResp = await fetch("https://api.anthropic.com/v1/messages", {
