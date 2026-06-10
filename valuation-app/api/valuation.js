@@ -26,7 +26,7 @@ PRIVATE COMPANY ADJUSTMENTS:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-opus-4-6",
         max_tokens: 4000,
         system: `You are a senior M&A investment banker. Using the financial data and live market research, produce a rigorous valuation with three distinct scenarios. Use multiples from live research where available and cite sources.
 ${privateCompanyGuidance}
