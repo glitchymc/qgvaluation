@@ -64,7 +64,7 @@ export default function App() {
       });
       if (!researchResp.ok) {
         const e = await researchResp.json();
-        throw new Error(e.error || "Research failed");
+        throw new Error(typeof e.error === "string" ? e.error : JSON.stringify(e));
       }
       const { researchText } = await researchResp.json();
 
@@ -81,7 +81,7 @@ export default function App() {
       clearInterval(interval);
       if (!valuationResp.ok) {
         const e = await valuationResp.json();
-        throw new Error(e.error || "Valuation failed");
+        throw new Error(typeof e.error === "string" ? e.error : JSON.stringify(e));
       }
       const parsed = await valuationResp.json();
       setResult(parsed);
