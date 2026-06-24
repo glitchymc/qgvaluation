@@ -26,8 +26,8 @@ PRIVATE COMPANY ADJUSTMENTS:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-opus-4-6",
-        max_tokens: 8000,
+        model: "claude-sonnet-4-5",
+        max_tokens: 4000,
         system: `You are a senior M&A investment banker. Using the financial data and live market research, produce a rigorous valuation with three distinct scenarios. Use multiples from live research where available and cite sources.
 ${privateCompanyGuidance}
 
@@ -66,7 +66,7 @@ Live market research: ${researchText || "Not available — use training data for
 
     if (!response.ok) {
       const detail = await response.text();
-      return res.status(200).json({ error: "Valuation failed", detail });
+      return res.status(500).json({ error: "Valuation failed", detail });
     }
 
     const data = await response.json();
