@@ -64,7 +64,7 @@ export default function App() {
       });
       if (!researchResp.ok) {
         const e = await researchResp.json();
-        throw new Error(typeof e.error === "string" ? e.error : JSON.stringify(e));
+        throw new Error(e.error || "Research failed");
       }
       const { researchText } = await researchResp.json();
 
@@ -81,7 +81,7 @@ export default function App() {
       clearInterval(interval);
       if (!valuationResp.ok) {
         const e = await valuationResp.json();
-        throw new Error(typeof e.error === "string" ? e.error : JSON.stringify(e));
+        throw new Error(e.error || "Valuation failed");
       }
       const parsed = await valuationResp.json();
       setResult(parsed);
@@ -294,6 +294,7 @@ function ResultsScreen({ result, onReset }) {
     valuations: v, scenarios, precedent_deals, football_field,
     key_value_drivers, risk_factors, recommendation,
     implied_multiples, accuracy_assessment, private_company_adjustments,
+    dcf_assumptions, dcf_projections,
     _research_summary
   } = result;
 
@@ -494,6 +495,8 @@ function ResultsScreen({ result, onReset }) {
           <p className="rec-text">{recommendation}</p>
         </div>
 
+        {dcf_assumptions && <DCFAssumptionsSection assumptions={dcf_assumptions} projections={dcf_projections} />}
+
         {accuracy_assessment && <AccuracySection accuracy={accuracy_assessment} />}
 
         {_research_summary && (
@@ -510,6 +513,140 @@ function ResultsScreen({ result, onReset }) {
         )}
 
         <p className="legal">LIVE DATA SOURCED AT TIME OF ANALYSIS · AI-ASSISTED VALUATION · NOT FINANCIAL ADVICE · VERIFY WITH LICENSED ADVISORS</p>
+      </div>
+    </div>
+  );
+}
+
+
+function DCFAssumptionsSection({ assumptions: a, projections }) {
+  if (!a) return null;
+  const fmtPctLocal = (n) => n == null ? "—" : `${(Number(n) * 100).toFixed(1)}%`;
+  const fmtXLocal   = (n) => n == null ? "—" : `${Number(n).toFixed(1)}x`;
+  const fmtMLocal   = (n) => {
+    if (n == null || isNaN(n)) return "—";
+    if (Math.abs(n) >= 1000) return `$${(n/1000).toFixed(1)}B`;
+    return `$${Number(n).toFixed(0)}M`;
+  };
+
+  return (
+    <div className="dcf-section">
+      <div className="section-header">
+        <h2 className="section-title">DCF Assumptions</h2>
+        <span className="section-sub">Full input variables — verify before presenting</span>
+      </div>
+
+      {/* WACC build */}
+      <div className="dcf-wacc-card">
+        <div className="dcf-block-title">Discount Rate (WACC)</div>
+        <div className="dcf-wacc-grid">
+          {[
+            ["Risk-Free Rate", fmtPctLocal(a.risk_free_rate), "10yr Treasury"],
+            ["Equity Risk Premium", fmtPctLocal(a.equity_risk_premium), "Damodaran ERP"],
+            ["Co-Specific Premium", fmtPctLocal(a.company_specific_risk_premium), "Private co adjustment"],
+            ["WACC", fmtPctLocal(a.wacc), "Final discount rate"],
+          ].map(([label, val, sub]) => (
+            <div key={label} className="dcf-wacc-item">
+              <div className="dcf-wacc-label">{label}</div>
+              <div className="dcf-wacc-value">{val}</div>
+              <div className="dcf-wacc-sub">{sub}</div>
+            </div>
+          ))}
+        </div>
+        {a.wacc_rationale && <p className="dcf-rationale">{a.wacc_rationale}</p>}
+      </div>
+
+      {/* Growth & margins */}
+      <div className="dcf-assumptions-grid">
+        <div className="dcf-card">
+          <div className="dcf-block-title">Revenue Growth Projections</div>
+          {[1,2,3,4,5].map(yr => {
+            const val = a[`revenue_growth_y${yr}`];
+            return (
+              <div key={yr} className="dcf-row">
+                <span className="dcf-row-label">Year {yr}</span>
+                <div className="dcf-row-bar-wrap">
+                  <div className="dcf-row-bar" style={{ width: `${Math.min(100, (val || 0) * 300)}%` }} />
+                </div>
+                <span className="dcf-row-val">{fmtPctLocal(val)}</span>
+              </div>
+            );
+          })}
+          <div className="dcf-row dcf-row-terminal">
+            <span className="dcf-row-label">Terminal Growth</span>
+            <div className="dcf-row-bar-wrap">
+              <div className="dcf-row-bar dcf-bar-terminal" style={{ width: `${Math.min(100, (a.terminal_growth_rate || 0) * 300)}%` }} />
+            </div>
+            <span className="dcf-row-val">{fmtPctLocal(a.terminal_growth_rate)}</span>
+          </div>
+          {a.terminal_growth_rationale && <p className="dcf-rationale">{a.terminal_growth_rationale}</p>}
+        </div>
+
+        <div className="dcf-card">
+          <div className="dcf-block-title">Margin Assumptions</div>
+          <div className="dcf-margin-row">
+            <span className="dcf-row-label">Current EBITDA Margin</span>
+            <span className="dcf-row-val">{fmtPctLocal(a.current_ebitda_margin)}</span>
+          </div>
+          <div className="dcf-margin-arrow">↓ expands over {a.projection_years} years</div>
+          <div className="dcf-margin-row dcf-margin-exit">
+            <span className="dcf-row-label">Exit EBITDA Margin</span>
+            <span className="dcf-row-val dcf-val-green">{fmtPctLocal(a.exit_ebitda_margin)}</span>
+          </div>
+          {a.exit_margin_rationale && <p className="dcf-rationale">{a.exit_margin_rationale}</p>}
+
+          {(a.illiquidity_discount > 0 || a.size_discount > 0) && (
+            <div className="dcf-discounts">
+              <div className="dcf-block-title" style={{marginTop:12}}>Private Co Discounts</div>
+              {a.illiquidity_discount > 0 && <div className="dcf-margin-row"><span className="dcf-row-label">Illiquidity Discount</span><span className="dcf-row-val dcf-val-red">-{fmtPctLocal(a.illiquidity_discount)}</span></div>}
+              {a.size_discount > 0 && <div className="dcf-margin-row"><span className="dcf-row-label">Size Discount</span><span className="dcf-row-val dcf-val-red">-{fmtPctLocal(a.size_discount)}</span></div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Projections table */}
+      {projections?.length > 0 && (
+        <div className="dcf-projections">
+          <div className="dcf-block-title" style={{marginBottom:10}}>5-Year Cash Flow Projections</div>
+          <div className="table-wrap">
+            <table className="comps-table">
+              <thead>
+                <tr>
+                  {["Year", "Revenue", "EBITDA Margin", "EBITDA", "Free Cash Flow"].map(h => <th key={h}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {projections.map((p, i) => (
+                  <tr key={i}>
+                    <td className="td-company">Year {p.year}</td>
+                    <td className="td-mono">{fmtMLocal(p.revenue)}</td>
+                    <td className="td-mono">{fmtPctLocal(p.ebitda_margin)}</td>
+                    <td className="td-mono">{fmtMLocal(p.ebitda)}</td>
+                    <td className="td-mono td-green">{fmtMLocal(p.free_cash_flow)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Output bridge */}
+      <div className="dcf-bridge">
+        <div className="dcf-block-title" style={{marginBottom:12}}>EV → Equity Value Bridge</div>
+        <div className="dcf-bridge-row">
+          <span>Implied Enterprise Value</span>
+          <span className="dcf-bridge-val">{fmtMLocal(a.implied_ev)}</span>
+        </div>
+        <div className="dcf-bridge-row dcf-bridge-sub">
+          <span>Less: Net Debt (Debt − Cash)</span>
+          <span className="dcf-bridge-val">{fmtMLocal(a.net_debt)}</span>
+        </div>
+        <div className="dcf-bridge-row dcf-bridge-total">
+          <span>Implied Equity Value</span>
+          <span className="dcf-bridge-val dcf-val-green">{fmtMLocal(a.implied_equity_value)}</span>
+        </div>
       </div>
     </div>
   );
