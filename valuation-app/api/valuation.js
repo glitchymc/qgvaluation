@@ -27,7 +27,7 @@ PRIVATE COMPANY ADJUSTMENTS:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 4000,
+        max_tokens: 16000,
         system: `You are a senior M&A investment banker. Using the financial data and live market research, produce a rigorous valuation with three distinct scenarios. Use multiples from live research where available and cite sources.
 ${privateCompanyGuidance}
 
